@@ -1,0 +1,25 @@
+services:
+  # 🗄️ Relational SQL Storage Layer
+  postgres-db:
+    image: postgres:16-alpine
+    container_name: aura_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: aura_admin_Krishna
+      POSTGRES_PASSWORD: aura_secure_password_Krishna
+      POSTGRES_DB: aura_identity
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - aura-network
+
+# 💾 Persistent Storage Volumes (Saves your SQL data safely to your local hard drive)
+volumes:
+  postgres_data:
+
+# 🌐 Isolated Virtual Security Network Bridge
+networks:
+  aura-network:
+    driver: bridge
