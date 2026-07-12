@@ -1,6 +1,6 @@
 import express from "express";
 import dotenv from "dotenv";
-import morgan from "morgan";
+import morgan from "morgan"; // usef for logging HTTP requests
 import {connectPostgres } from "./config/db.js";
 
 dotenv.config();
@@ -11,7 +11,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(express.json());
-app.use(morgan("dev"));
+app.use(morgan("dev")); //http request logger middleware
 
 app.get("/", (req, res) => {
   res.status(200);
