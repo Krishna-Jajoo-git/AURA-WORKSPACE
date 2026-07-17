@@ -49,7 +49,7 @@ export const handleGoogleLogin = async(req,res)=>{
         
         if(!userData.success){
             return res.status(400).json({
-                sucess: false,
+                success: false,
                 message : "Invalid user data",
                 error : userData.error.errors.map(err => err.message).join(",")
             })
@@ -87,4 +87,48 @@ export const handleGoogleLogin = async(req,res)=>{
         res.status(500).json({error: "Internal Server Error"});
     }   
 
+}
+
+export const getMe = async(req,res)=>{
+    try{
+        const query = 'SELECT google_id,name,email,picture FROM users WHERE google_id =$1';
+        const result = await pool.query(query,[req.user.googleId]);
+
+        if(result.rows.length === 0){
+            return res.status(404).json({
+                success : false,
+                error : "User not found"
+            })
+        }
+
+        return res.status(200).json({
+            success : true,
+            user : result.rows[0]
+        })
+        }catch(err){
+            return res.status(500).json({
+                success : false,
+                error : "Internal Server Error"
+            })
+        }
+}
+
+export const handleLogout = (req,res)=>{
+    try{
+        res.clearCookie("aura_session",{
+            httpOnly:true,
+            secure: process.env.NODE_ENV ==="production",
+            sameSite: "lax"
+        })
+
+        return res.status(200).json({
+            success : true,
+            message : "Logged out successfully"
+        })
+    }catch(err){
+        return res.status(500).json({
+            success : false,
+            error : "Internal Server Error"
+        })
+    }
 }
