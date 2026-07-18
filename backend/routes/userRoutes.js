@@ -1,6 +1,6 @@
 import express from 'express';
 import { handleGoogleLogin,getMe,handleLogout } from '../controllers/userController.js';
-import { requireAuth } from '../middleware/authMiddleware.js';
+import { requireAuth } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 

@@ -2,7 +2,7 @@ import jwt from "jsonwebtoken";
 
 export const requireAuth =(req,res,next)=>{
     try{
-        const token = req.cookies.aura-session;
+        const token = req.cookies.aura_session;
 
     if(!token){
         return res.status(401).json({
