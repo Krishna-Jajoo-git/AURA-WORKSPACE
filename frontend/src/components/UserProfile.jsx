@@ -10,6 +10,7 @@ function UserProfile({ user,onLogout }) {
         <img 
           src={user.picture} 
           alt={`${user.name}'s avatar`} 
+          referrerPolicy="no-referrer"
           style={{ borderRadius: '50%', width: '96px', height: '96px', objectFit: 'cover', border: '2px solid #6c5ce7' }} 
         />
     )}

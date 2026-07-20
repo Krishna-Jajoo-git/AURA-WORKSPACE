@@ -14,8 +14,10 @@ export const connectPostgres = async () => {
     try{
         const client = await pool.connect();
         console.log('Connected to PostgreSQL database');
+
         await client.query(createUserTableQuery);
         console.log('User table created or already exists');
+        
         client.release();
     }catch(error){
         console.error('Error connecting to PostgreSQL database:', error.message);

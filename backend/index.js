@@ -13,13 +13,13 @@ connectPostgres();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(express.json());
-app.use(cookieParser()); // Parse cookies from incoming requests
-app.use(morgan("dev")); //http request logger middleware
 app.use(cors({
     origin: "http://localhost:5173", // Allow requests from this origin
     credentials: true, // Allow cookies to be sent with requests
   }));
+app.use(express.json());
+app.use(cookieParser()); // Parse cookies from incoming requests
+app.use(morgan("dev")); //http request logger middleware
 
 app.use("/api/users", userRoutes);
 
