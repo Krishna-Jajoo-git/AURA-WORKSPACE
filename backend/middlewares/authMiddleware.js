@@ -12,7 +12,7 @@ export const requireAuth =(req,res,next)=>{
     }
 
     const decoded = jwt.verify(token,process.env.JWT_SECRET);
-    req.user={googleId : decoded.googleId};
+    req.user={email : decoded.email};
     next();
     }catch(err){
         return res.status(401).json({
