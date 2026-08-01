@@ -3,7 +3,7 @@ import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { resend } from '../config/resend.js';
-import {googleUserSchema,registerSchema,loginSchema} from '../schemas/userSchema.js';
+import {googleUserSchema,registerSchema,loginSchema,resetPasswordSchema} from '../schemas/userSchema.js';
 import { storeOTP,getOTP,deleteOTP } from '../utils/otpstore.js'; 
 import crypto from 'crypto';
 
@@ -79,7 +79,10 @@ export const handleGoogleLogin = async(req,res)=>{
         });
     }catch(err){
         console.error(err);
-        res.status(500).json({error: "Internal Server Error"});
+        res.status(500).json({
+            success : false,
+            error: "Internal Server Error"
+        });
     }   
 }
 
@@ -166,7 +169,7 @@ export const handleVerifyOTP = async (req, res) => {
 
         const insertQuery=`INSERT INTO users (name, email, password, last_login) VALUES ($1, $2, $3, CURRENT_TIMESTAMP) RETURNING google_id, name, email, picture;`
 
-        const result = await pool.query(insertQuery,[cacheData.name,cacheData.email,cacheData.password]);
+        const result = await pool.query(insertQuery,[cacheData.name,email,cacheData.password]);
         const user = result.rows[0];
 
         deleteOTP(email);
@@ -204,7 +207,7 @@ export const handleCustomLogin = async(req,res)=>{
         const validation = loginSchema.safeParse(req.body);
         if(!validation.success){
             return res.status(400).json({
-                sucess : false,
+                success : false,
                 error : validation.error.errors.map(err => err.message).join(",")
             })
         }
@@ -224,7 +227,7 @@ export const handleCustomLogin = async(req,res)=>{
         if(!user.password){
             return res.status(400).json({
                 success : false,
-                error : "Invalid email or password"
+                error : "This account was registered using google login . Please log in back using google."
             })
         }
 
@@ -266,10 +269,85 @@ export const handleCustomLogin = async(req,res)=>{
     }
 }
 
+export const handleResendOTP= async(req,res)=>{
+    try{
+        const {email} = req.body
+        if(!email){
+            return res.status(400).json({
+                success : false,
+                error : "Missing email"
+            })
+        }
+
+        const cacheData = getOTP(email);
+        if(!cacheData){
+            return res.status(400).json({
+                success : false,
+                error : "Session expired or invalid. Please fill out the sign-up form again."
+            })
+        }
+
+        const COOLDOWN_MS=2*60*1000
+        const timePassed=Date.now() - cacheData.createdAt
+        if(timePassed < COOLDOWN_MS){
+            const secondsRemaning=Math.ceil((COOLDOWN_MS - timePassed) / 1000);
+            return res.status(400).json({
+                success : false,
+                error : `Please wait ${secondsRemaning} seconds before requesting another OTP.`
+            })
+        }
+
+        deleteOTP(email);
+
+        const newOtp = crypto.randomInt(100000,999999).toString();
+
+        storeOTP(email,{
+            name : cacheData.name,
+            password : cacheData.password,
+            otp : newOtp
+        },10*60*1000)
+
+        const { error } = await resend.emails.send({
+            from: 'Aura Workspace <onboarding@resend.dev>',
+            to: [email],
+            subject: 'Your New Aura Workspace Verification Code',
+            html: `
+                <div style="font-family: sans-serif; padding: 20px; border: 1px solid #e4e4e7; border-radius: 8px; max-width: 480px; margin: 0 auto;">
+                    <h2 style="color: #18181b;">Hello ${cacheData.name}!</h2>
+                    <p style="color: #52525b;">Here is your new verification code:</p>
+                    <h1 style="background: #f4f4f5; padding: 12px; text-align: center; letter-spacing: 8px; color: #09090b; border-radius: 6px;">${newOtp}</h1>
+                    <p style="color: #71717a; font-size: 14px;">This code is valid for 10 minutes. The previous code has been invalidated.</p>
+                </div>
+            `
+        });
+
+        if(error){
+           console.error("Resend Error:",error)
+           return res.status(500).json({
+            success : false,
+            error : "Failed to send new verification code"
+           })
+        }
+
+        return res.status(200).json({
+            success : true,
+            message : "New OTP sent to your email"
+        })
+        
+
+    }catch(err){
+        console.error("Reset OTP Error:",err)
+        return res.status(500).json({
+            success : false,
+            error : "Internal Server Error"
+        })
+    }
+}
+
 export const getMe = async(req,res)=>{
     try{
-        const query = 'SELECT google_id,name,email,picture FROM users WHERE google_id =$1';
-        const result = await pool.query(query,[req.user.googleId]);
+        const query = 'SELECT google_id,name,email,picture FROM users WHERE email =$1';
+        const result = await pool.query(query,[req.user.email]);
 
         if(result.rows.length === 0){
             return res.status(404).json({
@@ -288,6 +366,116 @@ export const getMe = async(req,res)=>{
                 error : "Internal Server Error"
             })
         }
+}
+
+export const handleForgotPassword = async(req,res)=>{
+    try{
+        const {email}= req.body
+        if(!email){
+            return res.status(400).json({
+                success : false,
+                error : "Missing email"
+            })
+        }
+
+        const result = await pool.query('SELECT * FROM users WHERE email = $1',[email]);
+        if(result.rows.length === 0){
+            return res.status(400).json({
+                success : false,
+                error : "User not found"
+            })
+        }
+        const user =result.rows[0];
+        const cachedData = getOTP(email)
+
+        if(cachedData){
+            const COOLDOWN_MS= 2*60*1000
+            const timePassed=Date.now() - cachedData.createdAt;
+            if(timePassed<COOLDOWN_MS){
+                const secondsRemaining = Math.ceil((COOLDOWN_MS - timePassed) / 1000);
+                return res.status(429).json({
+                    success: false,
+                    error: `Please wait ${secondsRemaining} seconds before requesting a new OTP.`
+                });
+            }
+        }
+
+        const otp = crypto.randomInt(100000,999999).toString();
+        storeOTP(email,{name: user.name,otp},10*60*1000)
+
+        const {error} =await resend.emails.send({
+            from: 'Aura Workspace <onboarding@resend.dev>',
+            to: [email],
+            subject: 'Reset Your Aura Workspace Password',
+            html: `
+                <div style="font-family: sans-serif; padding: 20px; border: 1px solid #e4e4e7; border-radius: 8px; max-width: 480px; margin: 0 auto;">
+                    <h2 style="color: #18181b;">Password Reset Request</h2>
+                    <p style="color: #52525b;">Hi ${user.name}, your verification code to reset your password is:</p>
+                    <h1 style="background: #f4f4f5; padding: 12px; text-align: center; letter-spacing: 8px; color: #09090b; border-radius: 6px;">${otp}</h1>
+                    <p style="color: #71717a; font-size: 14px;">This code expires in 10 minutes. If you didn't request this, you can ignore this email.</p>
+                </div>
+            `
+        });
+
+        if(error){
+            console.error("Resend error : ", error )
+            return res.status(500).json({
+                success : false,
+                error : "Failed to send reset code "
+            })
+        }
+        return res.status(200).json({
+            success : true,
+            message : "OTP sent to your email"
+        })
+            
+    }catch(err){
+        console.error("Forgot Password Error:",err)
+        return res.status(500).json({
+            success : false,
+            error : "Internal Server Error"
+        })
+    }
+}
+
+export const handleResetPassword = async(req,res)=>{
+    try{
+        const validation= resetPasswordSchema.safeParse(req.body)
+        if(!validation.success){
+            return res.status(400).json({
+                success : false,
+                error : validation.error.errors.map(err=>err.message).join(", ")
+            })
+        }
+
+        const {email,otp,newPassword}=validation.data
+
+        const cacheData=getOTP(email)
+        if(!cacheData || cacheData.otp !== otp){
+            return res.status(400).json({
+                success : false ,
+                error : "Invalid or Expired Otp."
+            })
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword,10)
+
+        await pool.query('UPDATE users SET password = $1 WHERE email = $2', [hashedPassword, email]);
+
+        deleteOTP(email)
+
+        return res.status(200).json({
+            success : true,
+            message : "Password updated successfully! You can now log in with your new password."
+        })
+
+    }catch(err){
+        console.error("Reset Password Error:",err)
+        return res.status(500).json({
+            success : false,
+            error : "Internal Server Error"
+        })
+    }
 }
 
 export const handleLogout = (req,res)=>{

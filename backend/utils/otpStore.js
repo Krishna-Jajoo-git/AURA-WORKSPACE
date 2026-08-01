@@ -1,8 +1,9 @@
 const otpCache = new Map();
 
-export const storeOTP = (email, date,ttlMs) => {
+export const storeOTP = (email, data,ttlMs=10*60*1000) => {
   otpCache.set(email, {
     ...data,
+    createdAt : Date.now(),
     expiresAt: Date.now() + ttlMs,
   });
 }
