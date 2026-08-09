@@ -58,13 +58,13 @@ export const handleGoogleLogin = async(req,res)=>{
         const result = await pool.query(upsertUserQuery,[googleId,name,email,picture]);
         const user = result.rows[0];
 
-        const jwtToken = jwt.sign({email : user.email},process.env.JWT_SECRET,{expiresIn : '24h'});
+        const jwtToken = jwt.sign({email : user.email},process.env.JWT_SECRET,{expiresIn : '7d'});
 
         res.cookie("aura_session",jwtToken,{
             httpOnly : true,
             secure : process.env.NODE_ENV === "production",
             sameSite : "lax",
-            maxAge : 24 * 60 * 60 * 1000
+            maxAge : 7 * 24 * 60 * 60 * 1000
         });
 
         return res.status(200).json({
@@ -85,6 +85,7 @@ export const handleGoogleLogin = async(req,res)=>{
         });
     }   
 }
+
 
 // Controller functions for custom registration
 export const handleRegister = async (req, res) => {
@@ -139,6 +140,8 @@ export const handleRegister = async (req, res) => {
         return res.status(500).json({ success: false, error: "Internal Server Error" });
     }
 };
+
+
 
 export const handleVerifyOTP = async (req, res) => {
     try{
@@ -202,6 +205,8 @@ export const handleVerifyOTP = async (req, res) => {
     }
 }
 
+
+
 export const handleCustomLogin = async(req,res)=>{
     try{
         const validation = loginSchema.safeParse(req.body);
@@ -212,7 +217,7 @@ export const handleCustomLogin = async(req,res)=>{
             })
         }
 
-        const {email,password} = validation.data;
+        const {email,password,rememberMe} = validation.data;
 
         const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
         if(result.rows.length === 0){
@@ -241,14 +246,20 @@ export const handleCustomLogin = async(req,res)=>{
 
         await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE email = $1',[email]);
 
-        const jwtToken = jwt.sign({email : user.email},process.env.JWT_SECRET,{expiresIn : '24h'})
+        const tokenDuration = rememberMe ? '7d' : '24h'; // 7 days if rememberMe is true, else 24 hours
+        const jwtToken = jwt.sign({email : user.email},process.env.JWT_SECRET,{expiresIn : tokenDuration});
 
-        res.cookie("aura_session",jwtToken,{
+        const cookieOptions = {
             httpOnly : true,
             secure : process.env.NODE_ENV === "production",
             sameSite : "lax",
-            maxAge : 24*60*60*1000
-            });
+        };
+            
+        if(rememberMe){
+            cookieOptions.maxAge = 7 * 24 * 60 * 60 * 1000; 
+        }
+
+        res.cookie("aura_session",jwtToken,cookieOptions);
 
         return res.status(200).json({
             success : true,
@@ -259,6 +270,7 @@ export const handleCustomLogin = async(req,res)=>{
                 email : user.email,
                 picture : user.picture
             }
+            
         });
     }catch(err){
         console.error("Login Error :",err)
@@ -266,8 +278,10 @@ export const handleCustomLogin = async(req,res)=>{
             success : false,
             error : "Internal Server Error"
         })
-    }
 }
+}
+
+
 
 export const handleResendOTP= async(req,res)=>{
     try{
@@ -344,6 +358,8 @@ export const handleResendOTP= async(req,res)=>{
     }
 }
 
+
+
 export const getMe = async(req,res)=>{
     try{
         const query = 'SELECT google_id,name,email,picture FROM users WHERE email =$1';
@@ -367,6 +383,8 @@ export const getMe = async(req,res)=>{
             })
         }
 }
+
+
 
 export const handleForgotPassword = async(req,res)=>{
     try{
@@ -438,6 +456,8 @@ export const handleForgotPassword = async(req,res)=>{
     }
 }
 
+
+
 export const handleResetPassword = async(req,res)=>{
     try{
         const validation= resetPasswordSchema.safeParse(req.body)
@@ -477,6 +497,8 @@ export const handleResetPassword = async(req,res)=>{
         })
     }
 }
+
+
 
 export const handleLogout = (req,res)=>{
     try{

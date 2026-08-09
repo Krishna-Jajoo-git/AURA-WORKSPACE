@@ -5,6 +5,7 @@ import GoogleAuthBtn from './GoogleAuthBtn';
 export default function LoginForm({ onLoginSuccess, setError, onSwitchTab, onForgotPassword }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -13,7 +14,7 @@ export default function LoginForm({ onLoginSuccess, setError, onSwitchTab, onFor
     setIsSubmitting(true);
     setError(null);
     try {
-      const res = await API.post('/users/login', { email, password });
+      const res = await API.post('/users/login', { email, password, rememberMe });
       if (res.data.success) onLoginSuccess(res.data.user);
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed.');
@@ -48,12 +49,28 @@ export default function LoginForm({ onLoginSuccess, setError, onSwitchTab, onFor
           required 
           disabled={isSubmitting} 
         />
-        
-        <div style={{ textAlign: 'right', marginBottom: '18px' }}>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: '#71717a' }}>
+            <input 
+              type="checkbox" 
+              checked={rememberMe} 
+              onChange={e => setRememberMe(e.target.checked)} 
+              disabled={isSubmitting}
+            />
+            Remember me
+          </label>
+
           <button type="button" onClick={onForgotPassword} className="btn-link">
             Forgot password?
           </button>
         </div>
+        
+        {/* <div style={{ textAlign: 'right', marginBottom: '18px' }}>
+          <button type="button" onClick={onForgotPassword} className="btn-link">
+            Forgot password?
+          </button>
+        </div> */}
 
         <button type="submit" className="btn-primary" disabled={isSubmitting}>
           {isSubmitting ? 'Signing in...' : 'Sign In'}
