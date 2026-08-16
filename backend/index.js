@@ -5,6 +5,7 @@ import {connectPostgres } from "./config/db.js";
 import cookieParser from "cookie-parser";
 import userRoutes from "./routes/userRoutes.js";
 import cors from "cors";
+import vaultRoutes from "./routes/vaultRoutes.js";
 
 dotenv.config();
 
@@ -22,6 +23,7 @@ app.use(cookieParser()); // Parse cookies from incoming requests
 app.use(morgan("dev")); //http request logger middleware
 
 app.use("/api/users", userRoutes);
+app.use("/api/vault", vaultRoutes);
 
 app.get("/", (req, res) => {
   res.status(200);

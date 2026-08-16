@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { resend } from '../config/resend.js';
 import {googleUserSchema,registerSchema,loginSchema,resetPasswordSchema} from '../schemas/userSchema.js';
-import { storeOTP,getOTP,deleteOTP } from '../utils/otpstore.js'; 
+import { storeOTP,getOTP,deleteOTP } from '../utils/otpStore.js'; 
 import crypto from 'crypto';
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
