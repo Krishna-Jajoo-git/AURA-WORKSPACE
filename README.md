@@ -1,6 +1,7 @@
+
 # 🌌 Aura Workspace
 
-> **Next-Generation AI-Powered Developer Mission Control & Micro-Tool Suite**
+> **Next-Generation AI-Powered Developer Mission Control & Multi-Project Command Center**
 
 [![Node.js](https://img.shields.io/badge/Node.js-v20%2B-emerald?style=flat-square&logo=node.js)](https://nodejs.org/)
 [![React](https://img.shields.io/badge/React-v18%2B-blue?style=flat-square&logo=react)](https://reactjs.org/)
@@ -16,34 +17,35 @@
 - [Overview](#-overview)
 - [Key Features](#-key-features)
 - [System Architecture](#-system-architecture)
+- [Security & Multi-Tenant Isolation](#-security--multi-tenant-isolation)
 - [Database Schema](#-database-schema)
 - [Getting Started](#-getting-started)
 - [Environment Variables](#-environment-variables)
-- [Future Vision & Roadmap](#-future-vision--roadmap)
+- [Product Vision & Core Module Roadmap](#-product-vision--core-module-roadmap)
 
 ---
 
 ## 🚀 Overview
 
-**Aura Workspace** is a unified developer platform and multi-tool workspace designed to manage projects, run AI-driven code analysis, inspect relational databases, and monitor application health from a single sleek, dark-themed dashboard.
+**Aura Workspace** is a centralized developer command center designed to manage all your projects, run AI-driven code analysis, inspect relational & NoSQL databases, monitor multi-project API traffic, and track API key quota limits in real-time from one unified, dark-mode web platform.
 
 ---
 
 ## ✨ Key Features
 
-### 🔮 Aura Vault *(AI Developer Assistant)*
-* **Dual Engine Architecture:** Toggle between **Flash (Mini)** for ultra-fast queries and **Reasoning (Pro)** for deep code analysis and architectural design.
-* **Automatic Failover:** Smart fallback mechanism that automatically switches to secondary model tiers if primary API quotas or rate limits (`429`) are encountered.
+### 🔮 1. Aura Vault *(AI Developer Assistant)*
+* **Dual Engine Architecture:** Toggle between **Flash (Mini)** for ultra-fast answers and **Reasoning (Pro)** for deep code analysis and architectural refactoring.
+* **Automatic Failover:** Smart fallback engine that automatically switches to secondary model tiers if primary API quotas or rate limits (`429`) are encountered.
 * **Multimodal Attachments:** Upload code snippets, logs, screenshots, and raw data files alongside your prompts.
 * **Signed UUID Session Security:** Chat sessions are bound to `UUID` primary keys and secured with `HMAC-SHA256` token signatures to prevent URL tampering.
-* **Persistent Markdown Rendering:** Syntax-highlighted code blocks, copyable snippets, and streaming message components.
+* **Persistent Markdown Rendering:** Syntax-highlighted code blocks, copyable snippets, and streaming response indicators.
 
-### 🗄️ PostgreSQL Database Layer
+### 🗄️ 2. PostgreSQL Relational Storage
 * **Dockerized PostgreSQL:** Isolated relational database running in a containerized environment (`aura_postgres`).
 * **Relational Schema:** Foreign key constraints (`UUID` references) between users and conversations with cascading deletes.
 * **Auto Migration Support:** Database initialization logic that validates and creates tables automatically on server startup.
 
-### 🛡️ User Authentication & Security
+### 🛡️ 3. User Authentication & Security
 * **Google OAuth 2.0 & Custom Auth:** Dual login support via Google verification tokens or custom email/password with OTP verification via Resend.
 * **HttpOnly Session Cookies:** Secure JWT session storage with `sameSite` protection and automated expiration handling.
 * **Honeypot Security Interceptors:** Built-in bot protection fields to prevent automated sign-up abuse.
@@ -54,7 +56,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                           Aura Workspace UI                             │
+│                      Aura Workspace Command UI                          │
 │                      (React 18 + Vite + Tailwind)                       │
 └────────────────────────────────────┬────────────────────────────────────┘
                                      │  CORS / HttpOnly JWT
@@ -62,17 +64,27 @@
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                        Express 5 Backend Core                           │
 │     ├── /api/users    (Auth, Google OAuth, OTP, Password Reset)         │
-│     └── /api/vault    (AI Sessions, Message Stream, HMAC Validation)    │
+│     ├── /api/vault    (AI Sessions, Message Stream, HMAC Validation)    │
+│     └── /api/sentinel (Real-time Telemetry & API Key Health Monitor)     │
 └──────────────────┬──────────────────────────────────┬───────────────────┘
                    │                                  │
                    ▼                                  ▼
 ┌───────────────────────────────────┐      ┌──────────────────────────────┐
 │  PostgreSQL 16 (Docker Container) │      │  Google Generative AI SDK    │
 │  - users (UUID / Serial PK)       │      │  - Primary: Gemini 3.5/3.7   │
-│  - vault_chats (UUID PK)          │      │  - Backup: Failover Tier     │
+│  - vault_chats (UUID PK)          │      │  - Backup: Failover Engine   │
 │  - vault_messages (Serial PK)     │      └──────────────────────────────┘
 └───────────────────────────────────┘
 ```
+
+---
+
+## 🔒 Security & Multi-Tenant Isolation
+
+* **AES-256-GCM Credential Encryption:** Database connection URIs and sensitive API keys are encrypted at rest using AES-256-GCM before saving to PostgreSQL.
+* **Strict Ownership Checks (RBAC):** Every API endpoint verifies `req.user.id` against requested `projectId` resources before establishing sockets or reading schema data.
+* **Destructive Command Guard:** Dangerous SQL execution (`DROP TABLE`, `TRUNCATE`) requires dual-confirmation modal triggers or a "Read-Only Sandbox Switch".
+* **TLS 1.3 / SSL Encryption:** All external database connections enforce encrypted tunnels in transit.
 
 ---
 
@@ -171,12 +183,39 @@ Open `http://localhost:5173` in your browser.
 
 ---
 
-## 🗺️ Future Vision & Roadmap
+## 🗺️ Product Vision & Core Module Roadmap
 
-* [ ] **Data Engine (Schema Studio):** Visual PostgreSQL & MongoDB query runner and ERD interactive inspector.
-* [ ] **Cloud Shell:** Embedded container WebSockets CLI terminal.
-* [ ] **API Sentinel:** Real-time API rate limit tracking, JWT health audit, and multi-project telemetry.
-* [ ] **Multi-Project Workspace Switcher:** Centralized dashboard tab switcher for managing multiple app backends.
+### 🔔 1. Real-Time Alert & Quota Engine
+* **Live WebSocket Notifications:** Floating alert toasts when API keys (Gemini, Resend, OpenAI) hit usage limits (`429 Rate Limit Exceeded`).
+* **Auto Model Failover Tracker:** Notification drawer logging model switch events from Primary to Backup tiers.
+* **Notification Bell:** Header activity stream storing system uptime logs, quota warnings, and database errors.
+
+---
+
+### 🗄️ 2. Data Engine 2.0 *(Multi-Database Studio)*
+* **Multi-DB Support:** Connect PostgreSQL, MongoDB, MySQL, SQLite, or Firebase to any project.
+* **Visual ERD & Query Runner:** Inspect tables/collections, execute parameterized queries, and view pagination data grids.
+* **Safe Mode Toggle:** Read-Only switch to protect production data from accidental edits.
+
+---
+
+### 🛡️ 3. API Sentinel *(Multi-Project Traffic Monitor)*
+* **Universal Telemetry Middleware:** Light 5-line middleware to track incoming HTTP requests across all your external apps.
+* **Global Project Selector:** Filter analytics by `Aura Workspace`, `E-Commerce Store`, `Portfolio`, or custom project IDs.
+* **Metrics Dashboard:** Live requests/sec, error rate spikes (`500` / `404`), latency graphs, and uptime monitors.
+
+---
+
+### ⚡ 4. API Playground *(In-Browser Postman)*
+* **Request Builder:** Execute `GET`, `POST`, `PUT`, `DELETE` requests with headers, body payloads, and cookies.
+* **Auto Docs:** Generate OpenAPI / Swagger documentation and cURL snippets automatically.
+
+---
+
+### 🧰 5. Built-In Developer Utilities *(Swiss Army Knife)*
+* **JWT Decoder:** Inspect token headers, payload claims, and expiration timers.
+* **Bcrypt & Hash Tester:** Generate and verify SHA-256 signatures and Bcrypt password hashes.
+* **UUID & Secret Generator:** Generate secure UUID v4 tokens and cryptographic secrets in 1 click.
 
 ---
 
