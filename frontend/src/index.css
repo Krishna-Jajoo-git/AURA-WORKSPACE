@@ -155,3 +155,100 @@ body {
 .divider span {
   padding: 0 10px;
 }
+
+/* Typing Bubbles Animation */
+.typing-dot {
+  width: 6px;
+  height: 6px;
+  background-color: #818cf8;
+  border-radius: 50%;
+  display: inline-block;
+  animation: bounce-typing 1.4s infinite ease-in-out both;
+}
+
+.typing-dot:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes bounce-typing {
+  0%, 80%, 100% {
+    transform: scale(0);
+  }
+  40% {
+    transform: scale(1.0);
+  }
+}
+
+/* Markdown Content Styling */
+.vault-markdown h1 { 
+  font-size: 1.25rem; 
+  font-weight: 700; 
+  margin-top: 1rem; 
+  margin-bottom: 0.5rem; 
+  color: #f8fafc; 
+}
+.vault-markdown h2 { 
+  font-size: 1.1rem; 
+  font-weight: 600; 
+  margin-top: 0.85rem; 
+  margin-bottom: 0.4rem; 
+  color: #f1f5f9; 
+}
+.vault-markdown h3 { 
+  font-size: 1rem; 
+  font-weight: 600; 
+  margin-top: 0.75rem; 
+  margin-bottom: 0.35rem; 
+  color: #e2e8f0; 
+}
+.vault-markdown p { 
+  margin-bottom: 0.65rem; 
+  line-height: 1.6; 
+}
+.vault-markdown ul { 
+  list-style-type: disc; 
+  margin-left: 1.25rem; 
+  margin-bottom: 0.75rem; 
+  /* space-y: 0.25rem;  */
+}
+.vault-markdown ol { 
+  list-style-type: decimal; 
+  margin-left: 1.25rem; 
+  margin-bottom: 0.75rem; 
+}
+.vault-markdown li { 
+  margin-bottom: 0.25rem; 
+}
+.vault-markdown code { 
+  background-color: #0b0f17; 
+  border: 1px solid #1e293b; 
+  padding: 0.15rem 0.35rem; 
+  border-radius: 0.375rem; 
+  font-family: monospace; 
+  font-size: 0.825rem; 
+  color: #a5b4fc; 
+}
+.vault-markdown pre { 
+  background-color: #080c14; 
+  border: 1px solid #1e293b; 
+  padding: 0.85rem; border-radius: 
+  0.5rem; overflow-x: auto; 
+  margin: 0.75rem 0; 
+}
+.vault-markdown pre code { 
+  background-color: transparent; 
+  border: none; padding: 0; 
+  color: #e2e8f0; 
+}
+.vault-markdown hr { 
+  border-color: #1e293b; 
+  margin: 1rem 0; 
+}
+.vault-markdown strong { 
+  font-weight: 600; 
+  color: #ffffff; 
+}

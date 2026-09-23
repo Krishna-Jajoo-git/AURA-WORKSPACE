@@ -22,6 +22,11 @@ const MODEL_TIER = {
   },
 };
 
+const AURA_SYSTEM_INSTRUCTION = `You are Aura AI (also known as Aura Vault), an intelligent developer copilot and core assistant built specifically for Aura Workspace.
+- If asked about your identity, name, who created you, or what you are, always state clearly and confidently that you are Aura AI / Aura Vault for Aura Workspace.
+- Never refer to yourself as Gemini or state that you are a default Google model.
+- Maintain an expert, concise, supportive, and developer-focused tone.`;
+
 const formatAttachment = (file) => {
   if (!file) return null;
 
@@ -48,11 +53,28 @@ const formatAttachment = (file) => {
   return null;
 };
 
+// Helper to create consistent model options
+const getModelInstance = (modelName, customInstruction = AURA_SYSTEM_INSTRUCTION) => {
+  const options = {
+    model: modelName,
+    systemInstruction: customInstruction,
+  };
+
+  if (modelName === 'gemini-3.7-flash') {
+    options.generationConfig = {
+      thinkingConfig: { thinkingBudget: 2048 },
+    };
+  }
+
+  return genAI.getGenerativeModel(options);
+};
+
 export const generateAuraResponse = async (
   prompt,
   mode = 'mini',
   attachments = [],
-  conversationHistory = []
+  conversationHistory = [],
+  customSystemInstruction = AURA_SYSTEM_INSTRUCTION
 ) => {
   const selectedMode = MODEL_TIER[mode] ? mode : 'mini';
   const { primary, backup } = MODEL_TIER[selectedMode];
@@ -60,20 +82,40 @@ export const generateAuraResponse = async (
   const formattedAttachments = attachments.map(formatAttachment).filter(Boolean);
   const recentHistory = conversationHistory.slice(-6);
 
-  const formattedHistory = recentHistory.map((msg) => ({
+  let formattedHistory = recentHistory.map((msg) => ({
     role: msg.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: msg.text }],
+    parts: [{ text: msg.text || '' }],
   }));
+
+  // Discard any leading messages from 'model' since Gemini history must start with 'user'
+  const firstUserIndex = formattedHistory.findIndex((msg) => msg.role === 'user');
+  if (firstUserIndex === -1) {
+    formattedHistory = [];
+  } else {
+    formattedHistory = formattedHistory.slice(firstUserIndex);
+  }
+
+  // Merge consecutive messages of the same role to ensure strict alternating order
+  const mergedHistory = [];
+  for (const msg of formattedHistory) {
+    if (mergedHistory.length === 0) {
+      mergedHistory.push(msg);
+    } else {
+      const lastMsg = mergedHistory[mergedHistory.length - 1];
+      if (lastMsg.role === msg.role) {
+        lastMsg.parts[0].text += '\n' + msg.parts[0].text;
+      } else {
+        mergedHistory.push(msg);
+      }
+    }
+  }
+  formattedHistory = mergedHistory;
 
   const messageParts = [...formattedAttachments, { text: prompt }];
 
   // 1. Try Primary Engine
   try {
-    const model = genAI.getGenerativeModel(
-      primary === 'gemini-3.7-flash'
-        ? { model: primary, generationConfig: { thinkingConfig: { thinkingBudget: 2048 } } }
-        : { model: primary }
-    );
+    const model = getModelInstance(primary, customSystemInstruction);
 
     if (formattedHistory.length > 0) {
       const chat = model.startChat({ history: formattedHistory });
@@ -115,15 +157,11 @@ export const generateAuraResponse = async (
       throw error;
     }
 
-    console.warn(`[Aura AI]: Primary model (${primary}) failed due to rate limits or high demand. Failing over to backup (${backup})...`);
+    console.warn(`[Aura AI]: Primary model (${primary}) failed. Failing over to backup (${backup})...`);
 
     // 2. Try Backup Engine
     try {
-      const backupModel = genAI.getGenerativeModel(
-        backup === 'gemini-3.7-flash'
-          ? { model: backup, generationConfig: { thinkingConfig: { thinkingBudget: 2048 } } }
-          : { model: backup }
-      );
+      const backupModel = getModelInstance(backup, customSystemInstruction);
 
       if (formattedHistory.length > 0) {
         const chat = backupModel.startChat({ history: formattedHistory });
@@ -156,8 +194,7 @@ export const generateAuraResponse = async (
 };
 
 export const analyzeSnippets = async (codeBlock, stackTrace = '') => {
-  const prompt = `You are an expert software developer assistant for Aura Workspace.
-Analyze the following code snippet and optional stack trace.
+  const prompt = `Analyze the following code snippet and optional stack trace.
 Provide a JSON response with two keys:
 1. "explanation": A brief, 2-sentence summary of what this code or error trace does/means.
 2. "tags": An array of up to 5 lowercase programming language/framework tags (e.g., ["javascript", "express", "jwt", "auth"]).
@@ -171,7 +208,14 @@ Return ONLY raw JSON in this format:
 `;
 
   try {
-    const res = await generateAuraResponse(prompt, 'mini');
+    // Pass a strict JSON system instruction to avoid chatty responses breaking JSON.parse
+    const res = await generateAuraResponse(
+      prompt,
+      'mini',
+      [],
+      [],
+      'You are a strict JSON generator. You only output valid parseable JSON.'
+    );
     const cleanJson = res.text.replace(/```json|```/g, '').trim();
     return JSON.parse(cleanJson);
   } catch (error) {

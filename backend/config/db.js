@@ -1,6 +1,7 @@
 import pg from 'pg';
 import dotenv from 'dotenv';
 import { createUserTableQuery } from '../models/userModel.js';
+import { createVaultTableQuery } from '../models/vaultModel.js';
 
 dotenv.config();
 
@@ -17,6 +18,9 @@ export const connectPostgres = async () => {
 
         await client.query(createUserTableQuery);
         console.log('User table created or already exists');
+
+        await client.query(createVaultTableQuery);
+        console.log('Vault tables created or already exist');
         
         client.release();
     }catch(error){
