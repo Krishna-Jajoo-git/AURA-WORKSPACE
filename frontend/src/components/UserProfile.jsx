@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { LogOut, ChevronDown, User } from 'lucide-react';
+import { LogOut, ChevronDown } from 'lucide-react';
 
 export default function UserProfile({ user, onLogout }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const dropdownRef = useRef(null);
 
   useEffect(() => {
@@ -37,10 +38,11 @@ export default function UserProfile({ user, onLogout }) {
           transition: 'all 0.2s ease',
         }}
       >
-        {user.picture ? (
+        {user.picture && !imgError ? (
           <img
             src={user.picture}
             alt={user.name}
+            onError={() => setImgError(true)}
             style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }}
           />
         ) : (

@@ -1,14 +1,14 @@
-import { generateAuraResponse, analyzeSnippets } from "../services/aiService.js";
-import pool from "../config/db.js";
-import { createSignedChatToken, verifySignedChatToken } from "../utils/tokenSignature.js";
+import { generateAuraResponse, analyzeSnippets, generateFirstTurnTitle } from '../services/aiService.js';
+import pool from '../config/db.js';
+import { createSignedChatToken, verifySignedChatToken } from '../utils/tokenSignature.js';
+import { sendNotificationToUser } from '../utils/socket.js';
 
-// Helper to format chat object with signed token
 const formatChat = (chat, userId) => ({
   ...chat,
   token: createSignedChatToken(chat.id, userId),
 });
 
-// 1. Fetch all chats for logged-in user (pinned first, then newest)
+// 1. Fetch all chats for logged-in user
 export const getUserChats = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -24,8 +24,8 @@ export const getUserChats = async (req, res) => {
     const signedChats = result.rows.map((chat) => formatChat(chat, userId));
     return res.status(200).json({ success: true, chats: signedChats });
   } catch (err) {
-    console.error("Error fetching user chats:", err);
-    return res.status(500).json({ success: false, message: "Error fetching chats" });
+    console.error('Error fetching user chats:', err);
+    return res.status(500).json({ success: false, message: 'Error fetching chats' });
   }
 };
 
@@ -33,7 +33,7 @@ export const getUserChats = async (req, res) => {
 export const createNewChat = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { title = "New Conversation" } = req.body;
+    const { title = 'New Conversation' } = req.body;
 
     const result = await pool.query(
       `INSERT INTO vault_chats (user_id, title) 
@@ -45,8 +45,8 @@ export const createNewChat = async (req, res) => {
     const newChat = formatChat(result.rows[0], userId);
     return res.status(201).json({ success: true, chat: newChat });
   } catch (err) {
-    console.error("Error creating new chat:", err);
-    return res.status(500).json({ success: false, message: "Error creating new chat" });
+    console.error('Error creating new chat:', err);
+    return res.status(500).json({ success: false, message: 'Error creating new chat' });
   }
 };
 
@@ -56,23 +56,21 @@ export const getChatMessages = async (req, res) => {
     const userId = req.user.id;
     const { chatId: chatToken } = req.params;
 
-    // Verify HMAC signature to prevent URL alteration
     const chatId = verifySignedChatToken(chatToken, userId);
     if (!chatId) {
       return res.status(403).json({
         success: false,
-        message: "Access denied: Invalid or altered chat token.",
+        message: 'Access denied: Invalid or altered chat token.',
       });
     }
 
-    // Verify chat ownership in DB
     const chatCheck = await pool.query(
       `SELECT id FROM vault_chats WHERE id = $1 AND user_id = $2`,
       [chatId, userId]
     );
 
     if (chatCheck.rows.length === 0) {
-      return res.status(404).json({ success: false, message: "Chat not found" });
+      return res.status(404).json({ success: false, message: 'Chat not found' });
     }
 
     const result = await pool.query(
@@ -85,62 +83,97 @@ export const getChatMessages = async (req, res) => {
 
     return res.status(200).json({ success: true, messages: result.rows });
   } catch (err) {
-    console.error("Error fetching chat messages:", err);
-    return res.status(500).json({ success: false, message: "Error fetching messages" });
+    console.error('Error fetching chat messages:', err);
+    return res.status(500).json({ success: false, message: 'Error fetching messages' });
   }
 };
 
-// 4. Send prompt, query Gemini model, and persist user & AI messages
+// 4. Send prompt, query Gemini, persist messages & handle conversational renaming
 export const sendVaultMessage = async (req, res) => {
+  const userId = req.user.id;
   try {
-    const userId = req.user.id;
-    let { chatId: chatToken, prompt, mode = "mini", attachments = [] } = req.body;
+    let { chatId: chatToken, prompt, mode = 'mini', attachments = [] } = req.body;
 
     if (!prompt && (!attachments || attachments.length === 0)) {
-      return res.status(400).json({ success: false, message: "Prompt or attachments are required" });
+      return res.status(400).json({ success: false, message: 'Prompt or attachments are required' });
     }
 
     let isNewChat = false;
     let chatId = null;
+    let currentChatRecord = null;
 
-    // Create session if no chat exists yet
     if (!chatToken) {
-      const generatedTitle = prompt ? prompt.slice(0, 35) + (prompt.length > 35 ? "..." : "") : "New Conversation";
       const newChat = await pool.query(
-        `INSERT INTO vault_chats (user_id, title) VALUES ($1, $2) RETURNING *`,
-        [userId, generatedTitle || "New Conversation"]
+        `INSERT INTO vault_chats (user_id, title) VALUES ($1, 'New Conversation') RETURNING *`,
+        [userId]
       );
       chatId = newChat.rows[0].id;
+      currentChatRecord = newChat.rows[0];
       isNewChat = true;
     } else {
-      // Verify token signature against tampering
       chatId = verifySignedChatToken(chatToken, userId);
       if (!chatId) {
         return res.status(403).json({
           success: false,
-          message: "Access denied: Invalid or altered chat token.",
+          message: 'Access denied: Invalid or altered chat token.',
         });
       }
 
-      // Validate chat session ownership
       const chatCheck = await pool.query(
         `SELECT id, title FROM vault_chats WHERE id = $1 AND user_id = $2`,
         [chatId, userId]
       );
 
       if (chatCheck.rows.length === 0) {
-        return res.status(404).json({ success: false, message: "Chat not found" });
+        return res.status(404).json({ success: false, message: 'Chat not found' });
       }
 
-      // Auto-update placeholder title if it's the first prompt
-      if (chatCheck.rows[0].title === "New Conversation" && prompt) {
-        const updatedTitle = prompt.slice(0, 35) + (prompt.length > 35 ? "..." : "");
-        await pool.query(
-          `UPDATE vault_chats SET title = $1 WHERE id = $2`,
-          [updatedTitle, chatId]
-        );
-      }
+      currentChatRecord = chatCheck.rows[0];
     }
+
+    // Persist user message
+    const attachmentMeta = attachments.map((a) => ({ name: a.name, mimeType: a.mimeType }));
+    await pool.query(
+      `INSERT INTO vault_messages (chat_id, role, text, attachments) VALUES ($1, 'user', $2, $3)`,
+      [chatId, prompt || '', JSON.stringify(attachmentMeta)]
+    );
+
+    // =========================================================================
+    // [CONVERSATIONAL RENAMING SHORT-CIRCUIT]
+    // If the user is issuing a pure rename command, update PostgreSQL directly
+    // and answer instantly without querying Gemini. This saves 100% of tokens
+    // and prevents upstream 429/timeout errors from breaking renames.
+    // =========================================================================
+    const flexibleRenameRegex = /^(?:again\s+|please\s+|can\s+you\s+)?(?:rename|name)\s+(?:this\s+)?chat\s+(?:to|as|:)\s+["']?([a-zA-Z0-9 _-]{2,40})["']?[\.\?!]?$/i;
+    const renameMatch = prompt?.trim().match(flexibleRenameRegex);
+
+    if (renameMatch && renameMatch[1]) {
+      const manualRenameTitle = renameMatch[1].trim().replace(/\s+/g, ' ');
+
+      await pool.query(
+        `UPDATE vault_chats SET title = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3`,
+        [manualRenameTitle, chatId, userId]
+      );
+
+      const confirmText = `Done! This chat has been renamed to **"${manualRenameTitle}"**.\n\nWhat are we building or debugging under this project today?`;
+
+      const savedAiMsg = await pool.query(
+        `INSERT INTO vault_messages (chat_id, role, text, model_tier, is_failover) 
+         VALUES ($1, 'assistant', $2, 'mini', false) 
+         RETURNING id, role, text, model_tier AS "modelTier", is_failover AS "isFailOver", created_at`,
+        [chatId, confirmText]
+      );
+
+      return res.status(200).json({
+        success: true,
+        chatId,
+        token: createSignedChatToken(chatId, userId),
+        isNewChat,
+        updatedTitle: manualRenameTitle,
+        assistantMessage: savedAiMsg.rows[0],
+      });
+    }
+    // =========================================================================
 
     // Retrieve previous 6 messages for context
     const historyRes = await pool.query(
@@ -149,15 +182,18 @@ export const sendVaultMessage = async (req, res) => {
     );
     const conversationHistory = historyRes.rows.reverse();
 
-    // Persist user prompt & attachment metadata
-    const attachmentMeta = attachments.map((a) => ({ name: a.name, mimeType: a.mimeType }));
-    await pool.query(
-      `INSERT INTO vault_messages (chat_id, role, text, attachments) VALUES ($1, 'user', $2, $3)`,
-      [chatId, prompt || "", JSON.stringify(attachmentMeta)]
-    );
-
     // Query Gemini
     const aiResponse = await generateAuraResponse(prompt, mode, attachments, conversationHistory);
+
+    // Real-Time Telemetry: Failover Alert
+    if (aiResponse.isFailOver) {
+      sendNotificationToUser(userId, 'alert:model_failover', {
+        type: 'warning',
+        title: 'Model Engine Failover',
+        message: `Primary ${mode.toUpperCase()} engine reached capacity. Switched to backup model (${aiResponse.modelName}).`,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     // Persist assistant reply
     const savedAiMsg = await pool.query(
@@ -167,26 +203,88 @@ export const sendVaultMessage = async (req, res) => {
       [chatId, aiResponse.text, aiResponse.modelUsed, aiResponse.isFailOver]
     );
 
-    // Update timestamp
-    await pool.query(
-      `UPDATE vault_chats SET updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
-      [chatId]
-    );
+    // One-time automatic title generation for turn 1 (if not a manual rename)
+    if (isNewChat || currentChatRecord?.title === 'New Conversation') {
+      generateFirstTurnTitle(prompt, aiResponse.text)
+        .then(async (smartTitle) => {
+          try {
+            await pool.query(
+              `UPDATE vault_chats SET title = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3`,
+              [smartTitle, chatId, userId]
+            );
+          } catch (e) {
+            console.error('Failed to update smart title:', e.message);
+          }
+        })
+        .catch((err) => console.error('First turn auto-titling error:', err.message));
+    }
+
+    await pool.query(`UPDATE vault_chats SET updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [chatId]);
 
     return res.status(200).json({
       success: true,
       chatId,
       token: createSignedChatToken(chatId, userId),
       isNewChat,
+      updatedTitle: null,
       assistantMessage: savedAiMsg.rows[0],
     });
   } catch (err) {
-    console.error("Error in sendVaultMessage:", err);
-    return res.status(500).json({ success: false, message: err.message || "Failed to process message" });
+    console.error('Error in sendVaultMessage:', err);
+
+    if (err.status === 429 || (err.message && err.message.includes('429'))) {
+      sendNotificationToUser(userId, 'alert:rate_limit', {
+        type: 'error',
+        title: 'Quota Limit Exceeded',
+        message: 'Your request hit Google Gemini upstream rate limits. Please wait a moment before sending your next prompt.',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    return res.status(500).json({ success: false, message: err.message || 'Failed to process message' });
   }
 };
 
-// 5. Toggle pinned status
+// 5. Rename chat title manually via endpoint
+export const updateChatTitle = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { chatId: chatToken } = req.params;
+    const { title } = req.body;
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({ success: false, message: 'Title cannot be empty' });
+    }
+
+    const chatId = verifySignedChatToken(chatToken, userId);
+    if (!chatId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied: Invalid or altered chat token.',
+      });
+    }
+
+    const cleanTitle = title.trim().replace(/\s+/g, ' ').slice(0, 40);
+    const result = await pool.query(
+      `UPDATE vault_chats 
+       SET title = $1, updated_at = CURRENT_TIMESTAMP 
+       WHERE id = $2 AND user_id = $3 
+       RETURNING id, title`,
+      [cleanTitle, chatId, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Chat not found' });
+    }
+
+    return res.status(200).json({ success: true, title: result.rows[0].title });
+  } catch (err) {
+    console.error('Error renaming chat:', err);
+    return res.status(500).json({ success: false, message: 'Failed to rename chat' });
+  }
+};
+
+// 6. Toggle pinned status
 export const togglePinChat = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -196,7 +294,7 @@ export const togglePinChat = async (req, res) => {
     if (!chatId) {
       return res.status(403).json({
         success: false,
-        message: "Access denied: Invalid or altered chat token.",
+        message: 'Access denied: Invalid or altered chat token.',
       });
     }
 
@@ -209,17 +307,17 @@ export const togglePinChat = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: "Chat not found" });
+      return res.status(404).json({ success: false, message: 'Chat not found' });
     }
 
     return res.status(200).json({ success: true, isPinned: result.rows[0].is_pinned });
   } catch (err) {
-    console.error("Error toggling pin:", err);
-    return res.status(500).json({ success: false, message: "Failed to update pin" });
+    console.error('Error toggling pin:', err);
+    return res.status(500).json({ success: false, message: 'Failed to update pin' });
   }
 };
 
-// 6. Delete conversation thread
+// 7. Delete conversation thread
 export const deleteChat = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -229,7 +327,7 @@ export const deleteChat = async (req, res) => {
     if (!chatId) {
       return res.status(403).json({
         success: false,
-        message: "Access denied: Invalid or altered chat token.",
+        message: 'Access denied: Invalid or altered chat token.',
       });
     }
 
@@ -239,36 +337,36 @@ export const deleteChat = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: "Chat not found" });
+      return res.status(404).json({ success: false, message: 'Chat not found' });
     }
 
-    return res.status(200).json({ success: true, message: "Chat deleted successfully" });
+    return res.status(200).json({ success: true, message: 'Chat deleted successfully' });
   } catch (err) {
-    console.error("Error deleting chat:", err);
-    return res.status(500).json({ success: false, message: "Failed to delete chat" });
+    console.error('Error deleting chat:', err);
+    return res.status(500).json({ success: false, message: 'Failed to delete chat' });
   }
 };
 
-// 7. Direct AI response generation without session persistence
+// 8. Direct AI response generation without session persistence
 export const generateResponse = async (req, res) => {
   try {
-    const { prompt, mode = "mini", attachments = [] } = req.body;
+    const { prompt, mode = 'mini', attachments = [] } = req.body;
     const aiResponse = await generateAuraResponse(prompt, mode, attachments);
     return res.status(200).json({ success: true, response: aiResponse });
   } catch (err) {
-    console.error("Error in generateResponse:", err);
-    return res.status(500).json({ success: false, message: err.message || "Failed to generate response" });
+    console.error('Error in generateResponse:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Failed to generate response' });
   }
 };
 
-// 8. Analyze code snippets and stack traces
+// 9. Analyze code snippets and stack traces
 export const analyzeCode = async (req, res) => {
   try {
-    const { codeBlock, stackTrace = "" } = req.body;
+    const { codeBlock, stackTrace = '' } = req.body;
     const analysis = await analyzeSnippets(codeBlock, stackTrace);
     return res.status(200).json({ success: true, analysis });
   } catch (err) {
-    console.error("Error in analyzeCode:", err);
-    return res.status(500).json({ success: false, message: err.message || "Failed to analyze code" });
+    console.error('Error in analyzeCode:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Failed to analyze code' });
   }
 };

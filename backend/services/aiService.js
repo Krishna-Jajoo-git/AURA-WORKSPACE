@@ -193,6 +193,32 @@ export const generateAuraResponse = async (
   }
 };
 
+// =========================================================================
+// [TOKEN OPTIMIZATION]: One-time first-turn auto-titling helper
+// Runs ONLY on turn 1 using the ultra-lightweight gemini-3.5-flash-lite.
+// =========================================================================
+export const generateFirstTurnTitle = async (firstPrompt, firstReply) => {
+  try {
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-3.5-flash-lite',
+      generationConfig: { maxOutputTokens: 20, temperature: 0.3 },
+    });
+
+    const prompt = `Summarize the topic of this conversation into a concise title (3 to 5 words maximum).
+Do not wrap in quotes. Do not include prefixes like "Title:". Be direct, professional, and descriptive.
+
+User: ${firstPrompt || '[Uploaded an attachment/image]'}
+Assistant: ${firstReply ? firstReply.slice(0, 150) : ''}`;
+
+    const result = await model.generateContent(prompt);
+    const title = result.response.text().trim().replace(/^["']|["']$/g, '');
+    return title.length > 40 ? title.slice(0, 40) : title;
+  } catch (err) {
+    console.error('Auto-title generation failed, using fallback title:', err.message);
+    return firstPrompt ? firstPrompt.slice(0, 30) : 'New Conversation';
+  }
+};
+
 export const analyzeSnippets = async (codeBlock, stackTrace = '') => {
   const prompt = `Analyze the following code snippet and optional stack trace.
 Provide a JSON response with two keys:
@@ -208,7 +234,6 @@ Return ONLY raw JSON in this format:
 `;
 
   try {
-    // Pass a strict JSON system instruction to avoid chatty responses breaking JSON.parse
     const res = await generateAuraResponse(
       prompt,
       'mini',

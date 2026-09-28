@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
 
 :root {
   --primary: #6366f1;
@@ -251,4 +251,28 @@ body {
 .vault-markdown strong { 
   font-weight: 600; 
   color: #ffffff; 
+}
+
+/* Sleek Dark Mode Scrollbar */
+.custom-vault-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-vault-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-vault-scrollbar::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 9999px;
+}
+
+.custom-vault-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Firefox */
+.custom-vault-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #1e293b transparent;
 }

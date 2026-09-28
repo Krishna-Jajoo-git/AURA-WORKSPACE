@@ -254,9 +254,3 @@ Open `http://localhost:5173` in your browser.
 * **JWT Decoder:** Inspect token headers, payload claims, and expiration timers.
 * **Bcrypt & Hash Tester:** Generate and verify SHA-256 signatures and Bcrypt password hashes.
 * **UUID & Secret Generator:** Generate secure UUID v4 tokens and cryptographic secrets in 1 click.
-
----
-
-## 📜 License
-
-Distributed under the **ISC License**. See `LICENSE` for more information.

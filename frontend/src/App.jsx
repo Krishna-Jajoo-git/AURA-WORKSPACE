@@ -5,6 +5,7 @@ import AuthPage from './pages/AuthPage';
 import UserProfile from './components/UserProfile';
 import AuraVault from './components/vault/AuraVault';
 import { Sparkles, Database, Terminal, Shield, ArrowUpRight } from 'lucide-react';
+import { SocketProvider } from './context/SocketContext';
 
 function Dashboard({ user, onLogout }) {
   const workspaceApps = [
@@ -153,20 +154,22 @@ export default function App() {
   }
 
   return (
-    <Routes>
-      <Route
-        path="/"
-        element={
-          !user ? (
-            <div className="min-h-screen bg-[#0b0f17] flex items-center justify-center p-4">
-              <AuthPage onLoginSuccess={(userData) => setUser(userData)} />
-            </div>
-          ) : (
-            <Dashboard user={user} onLogout={handleLogout} />
-          )
-        }
-      />
-      <Route path="/vault" element={<AuraVault />} />
-    </Routes>
+    <SocketProvider user={user}>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            !user ? (
+              <div className="min-h-screen bg-[#0b0f17] flex items-center justify-center p-4">
+                <AuthPage onLoginSuccess={(userData) => setUser(userData)} />
+              </div>
+            ) : (
+              <Dashboard user={user} onLogout={handleLogout} />
+            )
+          }
+        />
+        <Route path="/vault" element={<AuraVault />} />
+      </Routes>
+    </SocketProvider>
   );
 }
